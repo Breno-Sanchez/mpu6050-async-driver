@@ -1,0 +1,10 @@
+[workspace]
+resolver = "2"
+members = [
+    "driver-core",
+    "mpu6050-driver",
+    "xtask"
+]
+exclude = [
+    "app-esp32"
+]

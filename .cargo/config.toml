@@ -1,0 +1,9 @@
+[alias]
+dev = "run -p xtask --"
+check-all = "run -p xtask -- check"
+ci = "run -p xtask -- ci"
+clean-all = "run -p xtask -- clean"
+size-src = "run -p xtask -- size"
+esp-build = "run -p xtask -- esp-build"
+esp-run = "run -p xtask -- esp-run"
+esp-monitor = "run -p xtask -- esp-monitor"

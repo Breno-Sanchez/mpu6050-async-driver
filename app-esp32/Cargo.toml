@@ -1,0 +1,23 @@
+[package]
+name = "app-esp32"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+
+[dependencies]
+driver-core = { path = "../driver-core" }
+embedded-hal = "1.0"
+esp-backtrace = { version = "0.19.0", features = ["esp32", "panic-handler", "println"] }
+esp-bootloader-esp-idf = { version = "0.5.0", features = ["esp32"] }
+esp-hal = { version = "~1.1.0", features = ["esp32"] }
+esp-println = { version = "0.17.0", features = ["esp32"] }
+mpu6050-driver = { path = "../mpu6050-driver" }
+
+[profile.dev]
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1
+debug = 2
+lto = "fat"
+opt-level = "s"

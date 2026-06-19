@@ -1,0 +1,12 @@
+/target
+/app-esp32/target
+
+*.zip
+*.tar
+*.tar.gz
+*.backup
+*.backup_*
+*.tmp
+*.log
+
+.DS_Store
