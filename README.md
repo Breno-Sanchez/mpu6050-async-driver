@@ -216,24 +216,9 @@ target/
 app-esp32/target/
 ```
 
-Elas podem ser removidas antes de enviar o projeto, pois serão recriadas em uma nova compilação.
+Elas podem ser removidas do projeto, pois serão recriadas em uma nova compilação.
 
 Os arquivos `Cargo.lock` foram mantidos para facilitar a reprodução das versões exatas das dependências usadas no projeto.
-
----
-
-## Como gerar um pacote limpo para envio
-
-A partir da pasta acima do projeto:
-
-```bash
-zip -r Driver_final.zip Driver \
-  -x '*/target/*' \
-  -x '*/.git/*' \
-  -x '*.zip'
-```
-
-Esse comando cria um arquivo `.zip` contendo o código-fonte e os arquivos de configuração, sem incluir artefatos de compilação.
 
 ---
 
