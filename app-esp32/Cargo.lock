@@ -6,13 +6,12 @@ version = 4
 name = "app-esp32"
 version = "0.1.0"
 dependencies = [
- "driver-core",
  "embedded-hal",
  "esp-backtrace",
  "esp-bootloader-esp-idf",
  "esp-hal",
  "esp-println",
- "mpu6050-driver",
+ "mpu6050-async",
 ]
 
 [[package]]
@@ -190,10 +189,6 @@ checksum = "d4b8a88685455ed29a21542a33abd9cb6510b6b129abadabdcef0f4c55bc8f61"
 dependencies = [
  "litrs",
 ]
-
-[[package]]
-name = "driver-core"
-version = "0.1.0"
 
 [[package]]
 name = "embassy-futures"
@@ -740,7 +735,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88904434abc2901f197fe8cc55f0445e7ded921dba5911dad2e2b39b48e663c4"
 
 [[package]]
-name = "mpu6050-driver"
+name = "mpu6050-async"
 version = "0.1.0"
 dependencies = [
  "embedded-hal-async",

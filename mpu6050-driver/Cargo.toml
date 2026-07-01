@@ -1,7 +1,0 @@
-[package]
-name = "mpu6050-driver"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-embedded-hal-async = "1.0"

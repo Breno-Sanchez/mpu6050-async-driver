@@ -1,10 +1,10 @@
-[workspace]
-resolver = "2"
-members = [
-    "driver-core",
-    "mpu6050-driver",
-    "xtask"
-]
-exclude = [
-    "app-esp32"
-]
+[package]
+name = "mpu6050-async"
+version = "0.1.0"
+edition = "2024"
+authors = ["Breno Gabriel Barão Sanchez <brenosanchez11@gmail.com>"]
+description = "An async driver for the MPU-6050 accelerometer and gyroscope using embedded-hal-async."
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+embedded-hal-async = "1.0"
