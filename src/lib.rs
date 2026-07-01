@@ -3,7 +3,7 @@
 use embedded_hal_async::i2c::I2c;
 use embedded_hal_async::i2c::Operation as I2cOperation;
 
-// Registradores do MPU-6050
+// MPU-6050 register map
 const REG_SMPLRT_DIV: u8 = 0x19;
 const REG_CONFIG: u8 = 0x1A;
 const REG_GYRO_CONFIG: u8 = 0x1B;
@@ -23,7 +23,7 @@ pub enum Address {
     SECONDARY = 0x69,
 }
 
-/// Formato dos dados do acelerômetro (G-Range)
+/// Accelerometer full-scale range
 #[derive(Copy, Clone, Debug)]
 pub enum AccelRange {
     G2 = 0x00,
@@ -32,7 +32,7 @@ pub enum AccelRange {
     G16 = 0x18,
 }
 
-/// Formato dos dados do giroscópio (DPS-Range)
+/// Gyroscope full-scale range in degrees per second
 #[derive(Copy, Clone, Debug)]
 pub enum GyroRange {
     Dps250 = 0x00,
@@ -41,7 +41,7 @@ pub enum GyroRange {
     Dps2000 = 0x18,
 }
 
-/// Taxa de amostragem baseada no divisor interno do MPU-6050
+/// Sample-rate configuration based on the internal divider register
 #[derive(Copy, Clone, Debug)]
 pub enum SampleRateDivider {
     Rate1kHz = 0x00,
@@ -50,7 +50,7 @@ pub enum SampleRateDivider {
     Rate125Hz = 0x07,
 }
 
-/// Configuração do filtro digital passa-baixa (DLPF)
+/// Digital low-pass filter configuration
 #[derive(Copy, Clone, Debug)]
 pub enum Dlpf {
     Hz260 = 0x00,
@@ -82,7 +82,7 @@ pub struct Motion {
 }
 
 // =========================================================================
-// O DRIVER PRINCIPAL (Independente de protocolo)
+// MAIN DRIVER (Protocol-independent)
 // =========================================================================
 
 pub struct Mpu6050Async<XBUS> {
@@ -95,7 +95,7 @@ impl<XBUS> Mpu6050Async<XBUS>
 where
     XBUS: AsyncBus,
 {
-    /// Cria uma nova instância do driver a partir de um Barramento (Bus) assíncrono
+    /// Creates a new driver instance from an asynchronous bus
     pub fn new(bus: XBUS) -> Self {
         Self {
             bus,
@@ -104,18 +104,18 @@ where
         }
     }
 
-    /// Lê o ID do dispositivo (Deve retornar 0x68)
+    /// Reads the device ID register. The MPU-6050 should return 0x68
     pub async fn get_device_id(&mut self) -> Result<u8, XBUS::Error> {
         self.bus.read_reg(REG_WHO_AM_I).await
     }
 
-    /// Verifica se o dispositivo conectado é um MPU-6050
+    /// Checks whether the connected device matches the expected MPU-6050 ID
     pub async fn is_connected(&mut self) -> Result<bool, XBUS::Error> {
         let id = self.get_device_id().await?;
         Ok(id == EXPECTED_DEVICE_ID)
     }
 
-    /// Inicializa o sensor, acorda o CI e configura acelerômetro e giroscópio
+    /// Initializes the device, wakes up the IC and configures accelerometer and gyroscope
     pub async fn setup(&mut self) -> Result<(), XBUS::Error> {
         self.bus.write_reg(REG_PWR_MGMT_1, 0x00).await?;
         self.set_sample_rate(SampleRateDivider::Rate125Hz).await?;
@@ -125,7 +125,7 @@ where
         Ok(())
     }
 
-    /// Configura a escala de leitura do acelerômetro
+    /// Configures the accelerometer full-scale range
     pub async fn set_accel_range(&mut self, range: AccelRange) -> Result<(), XBUS::Error> {
         match range {
             AccelRange::G2 => self.accel_scale_factor = 1.0 / 16384.0,
@@ -138,7 +138,7 @@ where
         Ok(())
     }
 
-    /// Configura a escala de leitura do giroscópio
+    /// Configures the gyroscope full-scale range
     pub async fn set_gyro_range(&mut self, range: GyroRange) -> Result<(), XBUS::Error> {
         match range {
             GyroRange::Dps250 => self.gyro_scale_factor = 1.0 / 131.0,
@@ -151,19 +151,19 @@ where
         Ok(())
     }
 
-    /// Configura o filtro digital passa-baixa
+    /// Configures the internal digital low-pass filter
     pub async fn set_dlpf(&mut self, dlpf: Dlpf) -> Result<(), XBUS::Error> {
         self.bus.write_reg(REG_CONFIG, dlpf as u8).await?;
         Ok(())
     }
 
-    /// Configura o divisor da taxa de amostragem
+    /// Configures the internal sample-rate divider
     pub async fn set_sample_rate(&mut self, divider: SampleRateDivider) -> Result<(), XBUS::Error> {
         self.bus.write_reg(REG_SMPLRT_DIV, divider as u8).await?;
         Ok(())
     }
 
-    /// Lê os três eixos brutos de aceleração
+    /// Reads raw acceleration data from the three axes
     pub async fn get_accel_raw(&mut self) -> Result<AccelRaw, XBUS::Error> {
         let mut buf = [0u8; 6];
         self.bus.read_multiple(REG_ACCEL_XOUT_H, &mut buf).await?;
@@ -175,7 +175,7 @@ where
         Ok((x, y, z))
     }
 
-    /// Lê os três eixos brutos do giroscópio
+    /// Reads raw gyroscope data from the three axes
     pub async fn get_gyro_raw(&mut self) -> Result<GyroRaw, XBUS::Error> {
         let mut buf = [0u8; 6];
         self.bus.read_multiple(REG_GYRO_XOUT_H, &mut buf).await?;
@@ -187,14 +187,14 @@ where
         Ok((x, y, z))
     }
 
-    /// Lê a temperatura bruta
+    /// Reads the raw temperature sample
     pub async fn get_temperature_raw(&mut self) -> Result<i16, XBUS::Error> {
         let mut buf = [0u8; 2];
         self.bus.read_multiple(REG_TEMP_OUT_H, &mut buf).await?;
         Ok(i16::from_be_bytes([buf[0], buf[1]]))
     }
 
-    /// Lê acelerômetro, temperatura e giroscópio em uma única rajada de 14 bytes
+    /// Reads accelerometer, temperature and gyroscope data in a single 14-byte burst
     pub async fn get_motion_raw(&mut self) -> Result<MotionRaw, XBUS::Error> {
         let mut buf = [0u8; 14];
         self.bus.read_multiple(REG_ACCEL_XOUT_H, &mut buf).await?;
@@ -220,7 +220,7 @@ where
         })
     }
 
-    /// Lê aceleração convertida para m/s²
+    /// Reads acceleration converted to m/s²
     pub async fn get_accel(&mut self) -> Result<Accel, XBUS::Error> {
         let accel = self.get_accel_raw().await?;
 
@@ -231,7 +231,7 @@ where
         ))
     }
 
-    /// Lê giroscópio convertido para graus por segundo
+    /// Reads gyroscope data converted to degrees per second
     pub async fn get_gyro(&mut self) -> Result<Gyro, XBUS::Error> {
         let gyro = self.get_gyro_raw().await?;
 
@@ -242,13 +242,13 @@ where
         ))
     }
 
-    /// Lê temperatura convertida para Celsius
+    /// Reads temperature converted to Celsius
     pub async fn get_temperature(&mut self) -> Result<f32, XBUS::Error> {
         let temperature = self.get_temperature_raw().await?;
         Ok((temperature as f32 / 340.0) + 36.53)
     }
 
-    /// Lê aceleração, temperatura e giroscópio convertidos
+    /// Reads converted acceleration, temperature and gyroscope data
     pub async fn get_motion(&mut self) -> Result<Motion, XBUS::Error> {
         let motion = self.get_motion_raw().await?;
 
@@ -275,10 +275,10 @@ where
 }
 
 // =========================================================================
-// CAMADA DE ABSTRAÇÃO DO BARRAMENTO
+// BUS ABSTRACTION LAYER
 // =========================================================================
 
-/// Trait interna que define as operações que qualquer barramento deve cumprir
+/// Internal trait defining the register-level operations required by any bus
 #[allow(async_fn_in_trait)]
 pub trait AsyncBus {
     type Error;
@@ -289,7 +289,7 @@ pub trait AsyncBus {
     async fn write_multiple(&mut self, reg: u8, bytes: &[u8]) -> Result<(), Self::Error>;
 }
 
-/// Implementação da abstração de barramento especificamente para I2C
+/// I2C implementation of the generic bus abstraction
 pub struct I2cBus<I2C> {
     i2c: I2C,
     address: u8,

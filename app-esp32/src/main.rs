@@ -20,6 +20,8 @@ const I2C_FREQ_KHZ: u32 = 400;
 const STARTUP_DELAY_MS: u64 = 200;
 const READ_INTERVAL_MS: u64 = 100;
 
+// Board-specific adapter that maps the ESP32 blocking I2C peripheral
+// to the generic async bus expected by the driver.
 struct EspBlockingI2cBus<I2C> {
     i2c: I2C,
     address: u8,
@@ -68,6 +70,7 @@ where
     }
 }
 
+// ESP32 hardware example. The generic driver remains isolated in the root crate.
 #[main]
 fn main() -> ! {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
@@ -146,6 +149,8 @@ fn fail(message: &str) -> ! {
     }
 }
 
+// Polls a future that is expected to complete immediately because this
+// adapter wraps blocking I2C operations.
 fn block_on_ready<F>(future: F) -> F::Output
 where
     F: Future,
