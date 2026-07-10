@@ -1,10 +1,10 @@
 # MPU-6050 Async Driver
 
-`mpu6050-async` is a compact `no_std` asynchronous Rust driver for the MPU-6050 IMU. It exposes accelerometer, gyroscope and temperature readings through an `embedded-hal-async`-based bus abstraction.
+`mpu6050-async-driver` is a compact `no_std` asynchronous Rust driver for the MPU-6050 IMU. It exposes accelerometer, gyroscope and temperature readings through an `embedded-hal-async`-based bus abstraction.
 
 The repository contains two parts:
 
-- `mpu6050-async`: the reusable, hardware-agnostic driver crate.
+- `mpu6050-async-driver`: the reusable, hardware-agnostic driver crate.
 - `app-esp32`: an ESP32 DevKit v1 hardware example using Embassy/ESP async runtime and async I2C.
 
 ## Features
@@ -31,6 +31,7 @@ The repository contains two parts:
 │   └── src/main.rs
 ├── Cargo.lock
 ├── Cargo.toml
+├── LICENSE
 ├── README.md
 └── src/lib.rs
 ```
@@ -135,7 +136,7 @@ From the repository root:
 cargo check
 ```
 
-This checks the reusable `mpu6050-async` crate.
+This checks the reusable `mpu6050-async-driver` crate.
 
 ## Build the ESP32 example
 
@@ -191,8 +192,4 @@ The ESP32 application is only a validation example. The reusable driver logic is
 
 ## License
 
-This project is released for completely unrestricted use.
-
-You may use, copy, modify, merge, publish, distribute, sublicense, sell and relicense this software for any purpose, without requesting permission and without paying royalties.
-
-The software is provided as-is, without warranty of any kind.
+This project is licensed under the BSD Zero Clause License (`0BSD`). See [`LICENSE`](LICENSE).

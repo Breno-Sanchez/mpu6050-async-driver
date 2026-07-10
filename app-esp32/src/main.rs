@@ -14,7 +14,7 @@ use esp_hal::{
     timer::timg::TimerGroup,
 };
 use esp_println::println;
-use mpu6050_async::{Address, I2cBus, Mpu6050Async};
+use mpu6050_async_driver::{Address, I2cBus, Mpu6050Async};
 
 const I2C_FREQ_KHZ: u32 = 400;
 const STARTUP_DELAY_MS: u64 = 200;

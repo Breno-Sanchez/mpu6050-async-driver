@@ -12,7 +12,7 @@ esp-bootloader-esp-idf = { version = "0.5.0", features = ["esp32"] }
 esp-hal = { version = "~1.1.0", features = ["esp32", "unstable"] }
 esp-println = { version = "0.17.0", features = ["esp32"] }
 esp-rtos = { version = "0.3.0", features = ["esp32", "embassy"] }
-mpu6050-async = { path = ".." }
+mpu6050-async-driver = { path = ".." }
 
 [profile.dev]
 opt-level = "s"
