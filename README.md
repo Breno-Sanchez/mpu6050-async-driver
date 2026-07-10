@@ -1,53 +1,45 @@
 # MPU-6050 Async Driver
 
-`mpu6050-async` is a `no_std` asynchronous Rust driver for the MPU-6050 inertial measurement unit. The driver exposes accelerometer, gyroscope and temperature readings through a hardware-agnostic bus abstraction based on `embedded-hal-async`.
+`mpu6050-async` is a compact `no_std` asynchronous Rust driver for the MPU-6050 IMU. It exposes accelerometer, gyroscope and temperature readings through an `embedded-hal-async`-based bus abstraction.
 
-The project follows the same architectural idea used in `adxl345-async`: the sensor logic lives in a reusable driver crate, while the board-specific code stays isolated in a separate hardware example.
+The repository contains two parts:
 
-## Project structure
+- `mpu6050-async`: the reusable, hardware-agnostic driver crate.
+- `app-esp32`: an ESP32 DevKit v1 hardware example using Embassy/ESP async runtime and async I2C.
+
+## Features
+
+- `no_std` driver crate
+- asynchronous register access
+- hardware, HAL and RTOS independent driver core
+- MPU-6050 accelerometer support
+- MPU-6050 gyroscope support
+- MPU-6050 temperature sensor support
+- raw and converted readings
+- combined 14-byte motion burst read
+- ESP32 validation example with async I2C
+
+## Repository layout
 
 ```text
 .
 ├── app-esp32/
 │   ├── build.rs
+│   ├── Cargo.lock
 │   ├── Cargo.toml
 │   ├── rust-toolchain.toml
 │   └── src/main.rs
+├── Cargo.lock
 ├── Cargo.toml
+├── README.md
 └── src/lib.rs
 ```
 
-## Crates
+## Driver architecture
 
-### `mpu6050-async`
+The driver is specific to the MPU-6050 register map, but it is not tied to a specific board, MCU, HAL or RTOS.
 
-Root crate containing the generic MPU-6050 driver.
-
-It includes:
-
-- MPU-6050 register map;
-- accelerometer configuration;
-- gyroscope configuration;
-- sample-rate configuration;
-- DLPF configuration;
-- raw accelerometer reads;
-- raw gyroscope reads;
-- temperature reads;
-- combined motion reads;
-- conversion to `m/s²`, `dps` and Celsius;
-- generic asynchronous bus abstraction.
-
-This crate is independent of ESP32, GPIOs, UART, RTOS, scheduler, bootloader and vendor-specific HAL APIs.
-
-### `app-esp32`
-
-Hardware validation example for ESP32 DevKit v1.
-
-It configures the real I2C peripheral and adapts it to the generic bus interface required by the driver. This is the only board-specific part of the project.
-
-## Architecture
-
-The driver is generic over a bus type:
+The core type is generic over the bus implementation:
 
 ```rust
 pub struct Mpu6050Async<XBUS> {
@@ -57,7 +49,7 @@ pub struct Mpu6050Async<XBUS> {
 }
 ```
 
-The only requirement is that the bus implements the internal `AsyncBus` trait:
+The bus only needs to implement the minimal asynchronous register interface required by the driver:
 
 ```rust
 pub trait AsyncBus {
@@ -70,25 +62,50 @@ pub trait AsyncBus {
 }
 ```
 
-This keeps the MPU-6050 logic independent from the concrete hardware implementation. To port the driver to another MCU or runtime, only a compatible bus adapter is required.
+For I2C devices, the crate provides `I2cBus<I2C>`, which wraps an `embedded-hal-async` I2C implementation.
 
-## MPU-6050 support
+## MPU-6050 configuration
 
-The driver supports the main internal measurement blocks of the MPU-6050:
+The ESP32 example initializes the sensor with:
 
-- accelerometer;
-- gyroscope;
-- temperature sensor.
+| Parameter | Value |
+|---|---|
+| I2C address | `0x68` |
+| Accelerometer range | `±4g` |
+| Gyroscope range | `±250 dps` |
+| Sample rate divider | 125 Hz effective sample rate |
+| DLPF | 44 Hz |
+| Read interval | 100 ms |
+| I2C frequency | 400 kHz |
 
-The combined motion read uses a single 14-byte burst starting at `ACCEL_XOUT_H`, reading accelerometer, temperature and gyroscope samples in sequence.
+The combined motion read starts at `ACCEL_XOUT_H` and reads 14 bytes in one burst:
 
-## Bus support
+```text
+accel X/Y/Z -> temperature -> gyro X/Y/Z
+```
 
-The current implementation targets I2C, which matches the GY-521 / MPU-6050 module used in the ESP32 validation setup.
+Converted values are reported as:
 
-UART is not implemented because it is not a native communication interface for this sensor. SPI is also not included in this project because the tested MPU-6050/GY-521 setup uses I2C.
+| Measurement | Unit |
+|---|---|
+| Accelerometer | `m/s²` |
+| Gyroscope | `dps` |
+| Temperature | `°C` |
 
-## ESP32 wiring
+## ESP32 hardware example
+
+The `app-esp32` crate validates the driver on an ESP32 DevKit v1. It uses:
+
+- `#[esp_rtos::main]` async entry point
+- Embassy executor
+- `embassy_time::Timer`
+- ESP async I2C via `.into_async()`
+- `sensor.setup().await`
+- `sensor.get_motion().await`
+
+The example no longer uses blocking I2C, busy-wait delays or a manual `block_on` helper.
+
+## Wiring
 
 | GY-521 / MPU-6050 | ESP32 DevKit v1 |
 |---|---|
@@ -98,59 +115,84 @@ UART is not implemented because it is not a native communication interface for t
 | SCL | GPIO22 |
 | AD0 | GND |
 
-With `AD0` connected to `GND`, the I2C address is `0x68`.
+With `AD0` connected to `GND`, the MPU-6050 uses I2C address `0x68`.
 
-## Build the generic driver
+## Requirements
 
-Run from the repository root:
+- Rust ESP toolchain configured
+- ESP32 DevKit v1
+- GY-521 / MPU-6050 module
+- USB cable with serial support
+- ESP environment export script available at `$HOME/export-esp.sh`
+
+The tested target uses the `+esp` Rust toolchain.
+
+## Check the generic driver
+
+From the repository root:
 
 ```bash
 cargo check
 ```
 
-This checks only the generic `mpu6050-async` crate.
+This checks the reusable `mpu6050-async` crate.
 
 ## Build the ESP32 example
 
-Run from the repository root:
+From the repository root:
 
 ```bash
-source "$HOME/export-esp.sh"
 cd app-esp32
+source "$HOME/export-esp.sh"
 cargo +esp build --release --bin app-esp32
 ```
 
-This builds the ESP32 hardware example using the generic driver from the root crate.
+This builds the ESP32 hardware example using the local driver crate.
 
-## Flash and monitor the ESP32
+## Flash and monitor
 
-Run inside `app-esp32`:
+From `app-esp32`:
 
 ```bash
 cargo +esp run --release --bin app-esp32
 ```
 
-Expected output:
+If the serial port is not detected automatically, set it explicitly:
+
+```bash
+ESPFLASH_PORT=/dev/ttyUSB0 cargo +esp run --release --bin app-esp32
+```
+
+or:
+
+```bash
+ESPFLASH_PORT=/dev/ttyACM0 cargo +esp run --release --bin app-esp32
+```
+
+## Expected output
 
 ```text
-MPU-6050 accelerometer and gyroscope
+MPU-6050 full motion data initialized!
 WHO_AM_I: 0x68
 I2C: SDA=GPIO21, SCL=GPIO22, address=0x68
 Accel: +/-4g | Gyro: +/-250 dps
+Runtime: Embassy async executor + async I2C
 
-accel m/s2 x=... y=... z=... | gyro dps x=... y=... z=... | temp C=...
+accel (m/s2): x=  9.610 y=  0.645 z= -5.030 | gyro (dps): x= -2.481 y= -0.672 z=  1.221 | temp:  18.96 C
 ```
 
-## Design summary
+Values depend on sensor orientation, calibration and module quality.
 
-The project removes the previous external driver manager and keeps the driver model idiomatic to Rust. The Rust type system and trait bounds express the dependency between the MPU-6050 driver and the bus abstraction without requiring a manual driver registry.
+## Notes
 
-The result is a smaller, clearer and more portable embedded driver:
+This is a driver for the MPU-6050. It is hardware-agnostic, not sensor-family-agnostic. The register map, scale factors and temperature formula are specific to the MPU-6050.
 
-- `no_std`;
-- async;
-- MCU-agnostic;
-- RTOS-agnostic;
-- HAL-agnostic;
-- I2C-based for the tested MPU-6050 module;
-- accelerometer and gyroscope support in the same driver.
+The ESP32 application is only a validation example. The reusable driver logic is isolated in the root crate.
+
+## License
+
+This project is released for completely unrestricted use.
+
+You may use, copy, modify, merge, publish, distribute, sublicense, sell and relicense this software for any purpose, without requesting permission and without paying royalties.
+
+The software is provided as-is, without warranty of any kind.
