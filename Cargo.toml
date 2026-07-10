@@ -1,5 +1,5 @@
 [package]
-name = "mpu6050-async"
+name = "mpu6050-async-driver"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
