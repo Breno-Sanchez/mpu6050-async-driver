@@ -2,9 +2,21 @@
 name = "mpu6050-async"
 version = "0.1.0"
 edition = "2024"
-authors = ["Breno Gabriel Barão Sanchez <brenosanchez11@gmail.com>"]
-description = "An async driver for the MPU-6050 accelerometer and gyroscope using embedded-hal-async."
-license = "MIT OR Apache-2.0"
+rust-version = "1.88"
+authors = [
+    "Breno-Sanchez",
+    "Jhonattan-Gabriel-D-Santana",
+]
+description = "A no_std async MPU-6050 driver with accelerometer, gyroscope and temperature support."
+repository = "https://github.com/Breno-Sanchez/mpu6050-async-driver"
+readme = "README.md"
+license = "0BSD"
+keywords = ["mpu6050", "imu", "i2c", "embedded", "async"]
+categories = ["embedded", "hardware-support", "no-std", "asynchronous"]
+exclude = [
+    "/app-esp32",
+    "/target",
+]
 
 [dependencies]
 embedded-hal-async = "1.0"
