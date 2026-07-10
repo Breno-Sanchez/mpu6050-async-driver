@@ -3,119 +3,86 @@
 
 esp_bootloader_esp_idf::esp_app_desc!();
 
-use core::future::Future;
-use core::task::{Context, Poll, Waker};
-use embedded_hal::i2c::I2c as BlockingI2c;
+use embassy_executor::Spawner;
+use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
 use esp_hal::{
     clock::CpuClock,
     i2c::master::{Config as I2cConfig, I2c},
-    main,
-    time::{Duration, Instant, Rate},
+    interrupt::software::SoftwareInterruptControl,
+    time::Rate,
+    timer::timg::TimerGroup,
 };
 use esp_println::println;
-use mpu6050_async::{Address, AsyncBus, Mpu6050Async};
+use mpu6050_async::{Address, I2cBus, Mpu6050Async};
 
 const I2C_FREQ_KHZ: u32 = 400;
 const STARTUP_DELAY_MS: u64 = 200;
 const READ_INTERVAL_MS: u64 = 100;
+const HEARTBEAT_INTERVAL_MS: u64 = 1_000;
 
-// Board-specific adapter that maps the ESP32 blocking I2C peripheral
-// to the generic async bus expected by the driver.
-struct EspBlockingI2cBus<I2C> {
-    i2c: I2C,
-    address: u8,
-}
-
-impl<I2C> EspBlockingI2cBus<I2C> {
-    const fn new(i2c: I2C, address: Address) -> Self {
-        Self {
-            i2c,
-            address: address as u8,
-        }
-    }
-}
-
-impl<I2C> AsyncBus for EspBlockingI2cBus<I2C>
-where
-    I2C: BlockingI2c,
-{
-    type Error = I2C::Error;
-
-    async fn read_reg(&mut self, reg: u8) -> Result<u8, Self::Error> {
-        let mut buf = [0u8; 1];
-        self.i2c.write_read(self.address, &[reg], &mut buf)?;
-        Ok(buf[0])
-    }
-
-    async fn write_reg(&mut self, reg: u8, val: u8) -> Result<(), Self::Error> {
-        self.i2c.write(self.address, &[reg, val])
-    }
-
-    async fn read_multiple(&mut self, reg: u8, buf: &mut [u8]) -> Result<(), Self::Error> {
-        self.i2c.write_read(self.address, &[reg], buf)
-    }
-
-    async fn write_multiple(&mut self, reg: u8, bytes: &[u8]) -> Result<(), Self::Error> {
-        let mut data = [0u8; 16];
-        data[0] = reg;
-
-        let len = bytes.len();
-
-        for index in 0..len {
-            data[index + 1] = bytes[index];
-        }
-
-        self.i2c.write(self.address, &data[..len + 1])
+#[embassy_executor::task]
+async fn heartbeat_task() {
+    loop {
+        Timer::after(Duration::from_millis(HEARTBEAT_INTERVAL_MS)).await;
     }
 }
 
 // ESP32 hardware example. The generic driver remains isolated in the root crate.
-#[main]
-fn main() -> ! {
+#[esp_rtos::main]
+async fn main(spawner: Spawner) {
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
 
+    let sw_int = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
+    let timg0 = TimerGroup::new(peripherals.TIMG0);
+    esp_rtos::start(timg0.timer0, sw_int.software_interrupt0);
+
+    spawner.spawn(heartbeat_task().expect("failed to create heartbeat task"));
+
     let i2c_config = I2cConfig::default().with_frequency(Rate::from_khz(I2C_FREQ_KHZ));
+
     let i2c0 = I2c::new(peripherals.I2C0, i2c_config)
         .unwrap()
         .with_sda(peripherals.GPIO21)
-        .with_scl(peripherals.GPIO22);
+        .with_scl(peripherals.GPIO22)
+        .into_async();
 
-    let bus = EspBlockingI2cBus::new(i2c0, Address::PRIMARY);
+    let bus = I2cBus::new(i2c0, Some(Address::PRIMARY));
     let mut sensor = Mpu6050Async::new(bus);
 
-    if block_on_ready(sensor.setup()).is_err() {
-        fail("MPU-6050 setup failed");
+    if sensor.setup().await.is_err() {
+        fail("MPU-6050 setup failed").await;
     }
 
-    let device_id = match block_on_ready(sensor.get_device_id()) {
+    let device_id = match sensor.get_device_id().await {
         Ok(id) => id,
-        Err(_) => fail("failed to read MPU-6050 device id"),
+        Err(_) => fail("failed to read MPU-6050 device id").await,
     };
 
-    let connected = match block_on_ready(sensor.is_connected()) {
+    let connected = match sensor.is_connected().await {
         Ok(value) => value,
-        Err(_) => fail("failed to validate MPU-6050 device id"),
+        Err(_) => fail("failed to validate MPU-6050 connection").await,
     };
 
     if !connected {
-        fail("invalid MPU-6050 WHO_AM_I");
+        fail("invalid MPU-6050 WHO_AM_I").await;
     }
 
-    wait_ms(STARTUP_DELAY_MS);
+    Timer::after(Duration::from_millis(STARTUP_DELAY_MS)).await;
 
-    println!("MPU-6050 accelerometer and gyroscope");
+    println!("MPU-6050 full motion data initialized!");
     println!("WHO_AM_I: 0x{:02X}", device_id);
     println!("I2C: SDA=GPIO21, SCL=GPIO22, address=0x68");
     println!("Accel: +/-4g | Gyro: +/-250 dps");
+    println!("Runtime: Embassy async executor + async I2C");
     println!("");
 
     loop {
-        match block_on_ready(sensor.get_motion()) {
+        match sensor.get_motion().await {
             Ok(motion) => {
                 println!(
-                    "accel m/s2 x={:>7.3} y={:>7.3} z={:>7.3} | gyro dps x={:>7.3} y={:>7.3} z={:>7.3} | temp C={:>6.2}",
+                    "accel (m/s2): x={:>7.3} y={:>7.3} z={:>7.3} | gyro (dps): x={:>7.3} y={:>7.3} z={:>7.3} | temp: {:>6.2} C",
                     motion.accel.0,
                     motion.accel.1,
                     motion.accel.2,
@@ -130,37 +97,14 @@ fn main() -> ! {
             }
         }
 
-        wait_ms(READ_INTERVAL_MS);
+        Timer::after(Duration::from_millis(READ_INTERVAL_MS)).await;
     }
 }
 
-fn wait_ms(ms: u64) {
-    let start = Instant::now();
-    let duration = Duration::from_millis(ms);
-
-    while start.elapsed() < duration {}
-}
-
-fn fail(message: &str) -> ! {
+async fn fail(message: &str) -> ! {
     println!("{message}");
 
     loop {
-        wait_ms(1000);
-    }
-}
-
-// Polls a future that is expected to complete immediately because this
-// adapter wraps blocking I2C operations.
-fn block_on_ready<F>(future: F) -> F::Output
-where
-    F: Future,
-{
-    let waker = Waker::noop();
-    let mut context = Context::from_waker(waker);
-    let mut future = core::pin::pin!(future);
-
-    match Future::poll(future.as_mut(), &mut context) {
-        Poll::Ready(output) => output,
-        Poll::Pending => fail("future unexpectedly pending"),
+        Timer::after(Duration::from_millis(1_000)).await;
     }
 }
